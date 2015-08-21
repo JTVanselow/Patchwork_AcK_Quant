@@ -1,0 +1,50 @@
+The software is described in the accompanying publication 
+"Fragment Ion Patchwork Quantification for Measuring Site-specific Acetylation Degrees"
+
+Rasha ElBashir1+, Jens T. Vanselow1+, Amelie Kraus2, Christian J. Janzen3, T. Nicolai Siegel2, Andreas Schlosser1*
+
+1Rudolf Virchow Center for Experimental Biomedicine, University of Wuerzburg, Josef-Schneider-Str. 2, 97080 Wuerzburg, Germany
+2Research Center for Infectious Diseases, University of Wuerzburg, Josef-Schneider-Str. 2, 97080 Wuerzburg, Germany
+3Department of Cell & Developmental Biology, Biocenter University of Wuerzburg, Am Hubland, 97074 Wuerzburg, Germany
+
+* To whom correspondence should be addressed. Email: andreas.schlosser@uni-wuerzburg.de
+
+
+This folder contains the R scripts used for calculating acetylation degrees. The scripts have been developed and tested under the 64 bit version of R 3.2.1 ("World-Famous Astronaut"). Please contact Jens Vanselow (jens.vanselow@uni-wuerzburg.de) for further information.
+
+
+Importantly, you need to organize your data in the following structure, which allows you to batch-process several projects (you are of course free to choose the names of the files and folder freely):
+
+	superMainFolder (e.g. My analysis)
+		Project 1 (e.g. "in vitro acetylation of recombinant Histones")
+			Experiment 1 (e.g. "50pc acetylation, replicate 1", contains all processed MS Raw files, i.e. technical replicates or samples digested with different enzymes, which should be analyzed together - important for outlier removal and quantification of fragment ions with more than one acetylation site)
+				Raw 1 (each folder contains exactly one mzData and one XML file from one MS Raw file)
+					xxx.mzData (contains Mascot Distiller information for quantification)
+					yyy.xml (contains Mascot identifications)
+				Raw 2
+				Raw n
+			Experiment 2 (e.g. "50pc acetylation, replicate 2")
+				Raw 1
+				Raw 2
+				Raw n
+			Experiment n
+				Raw 1
+				Raw 2
+				Raw n
+		Project n
+			...
+
+
+
+List files and description:
+
+Main_AcKQuant.R
+	This is the only script the user starts for the quantification process, which will then start other, dependent scripts. Here all arguments needed for processing the data have to be adjusted to the user environment. For each Experiment folder, a parallel process (execute_acetyl.quant.R) is started (dependent on the number of cores made available in the arguments).
+	execute_acetyl.quant.R is the main program started by Main_AcKQuant.R, which will start the XML (execute_mascot_XML_processing.R) and mzData (execute_mzData_processing.R) parsing and performing the quantitation. 
+	Analysis results can be found in the _results folder for each Project and Experiment separately. 
+	copy_combined_tables.R generates a folder _tables under the SuperMainFolder containing all the analysis results tables for each Experiment separately. 
+
+merge_tables.r
+	For further analysis and visualization of the data with other software, the data tables can be merged after completion of analysis. This can be achieved by moving / copying the result tables which the users wishes to be merged into subfolders (e.g. Supermainfolder -> _tables -> timestamp -> Project1, Project2, Project3)
+	The user can specify the Supermainfolder in merge_tables.r and a new folder _merged_tables will be generated which contains the merged data (in the example above there will be six files in _merged_tables, for each Project folder two files (e.g. Project1_merged_Combined_Acetylation.txt and Project1_pepMat_noFilt.txt). The files are tab delimited text files with a single header row, which can be easily imported into Excel (observe size limits), Spotfire etc.) 
+	The ..._merged_Combined_Acetylation.txt contains all quantitative information for all quantified fragment ions, including eliminated data. Only data rows that have passed all quality criteria have a value of 3 in the filt2 column! AcK denotes the acetylation site / position in the the protein, occup3 denotes the acetylation degree.
