@@ -1,12 +1,18 @@
 rm(list=ls(all=TRUE))
 
+
+library("doParallel")
 ###simple pasting path vectors
 pastePath	<- function(inVec){
 	return(paste(inVec,collapse="\\"))
 }
 
+
+
 ##arguments
-superMainFolder	<- "D:\\R-data-analysis\\Rasha"
+superMainFolder	<- "C:\\temp\\ACK test"
+ncores		<- 10
+
 
 timestamp		<- format(Sys.time(), format="%Y%m%d.%H%M")
 mainresultsFolder	<- pastePath(c(superMainFolder,"_results"))
@@ -22,26 +28,40 @@ if (!file.exists(mergedFolder)){
 
 tobe.merged.folders	<- list.files(tablesFolder,full.names = TRUE)
 tobe.merged.names		<- list.files(tablesFolder,full.names = FALSE)
-
-for(i in 1:length(tobe.merged.folders)){
-
-	merge.me<-tobe.merged.folders[i]
+i<-1
+#for(i in 1:length(tobe.merged.folders)){
+cl1 <- makeCluster(ncores)
+registerDoParallel(cl1)
+foreach(i = 1:length(tobe.merged.folders),.packages="plyr") %dopar% {
+	merge.me			<-tobe.merged.folders[i]
 	all.files			<- list.files(merge.me,full.names = TRUE)
 	Combined_Acetylation	<- all.files[grepl("Combined_Acetylation",all.files)]
 	pepMat_noFilt		<- all.files[grepl("pepMat_noFilt",all.files)]
-
+	colnames.list		<- vector("list", length(Combined_Acetylation)) 
 	###merged site quant table
 	outFilename		<- paste(c(mergedFolder,"\\",tobe.merged.names[i],"_merged_Combined_Acetylation.txt"),collapse="")
 	unlink(outFilename)
 	for(ii in 1:length(Combined_Acetylation)){
+		tempMat	<- read.delim(Combined_Acetylation[ii], sep="\t",header=TRUE,stringsAsFactors=FALSE,nrows = 1,na.strings = c("NA","n. def."))
+		colnames.list[[ii]]	<- colnames(tempMat)
+	}
+	colnames.table	<- sort(table(ldply(lapply(colnames.list, function(x) paste(x,collapse=";;;")))),decreasing=TRUE)
+	if(length(colnames.table)>1&TRUE %in% grepl("^id;;;accession;;;member",names(colnames.table))){
+		colnames.vec	<- unlist(strsplit(names(colnames.table)[grepl("^id;;;accession;;;member",names(colnames.table))][1],";;;"))
+	}else{
+		colnames.vec	<- unlist(strsplit(names(colnames.table)[1],";;;"))
+	}
+	for(ii in 1:length(Combined_Acetylation)){
 		tempMat	<- read.delim(Combined_Acetylation[ii], sep="\t",header=TRUE,stringsAsFactors=FALSE,na.strings = c("NA","n. def."))
+		tempMat	<- tempMat[,colnames.vec]
 		tempMat	<- tempMat[grepl("^agms|histone|Histone",tempMat$accession)|grepl("histone|Histone",tempMat$prot_desc),]
 		tempMat	<- tempMat[!is.na(tempMat$filt.ambig2),]
 		prefix	<- gsub(".*[/]|_Combined_Acetylation.*|_pepMat_noFilt.*","",Combined_Acetylation[ii])
 		tempMat$experiment	<- prefix
-		exclude.colnames	<- which(colnames(tempMat) %in% unlist(strsplit("selcol,filt.uni1,pep_local_mod_pos,pep_var_mod.2",",")))
+
+		exclude.colnames	<- which(colnames(tempMat) %in% unlist(strsplit("selcol,z,filt.uni1,peaks4,theopeaks4,pep_local_mod_pos,pep_var_mod.2",",")))
 		exclude.colnames	<- c(exclude.colnames,which(colnames(tempMat)=="selcol"):which(colnames(tempMat)=="ms2mz"),
-				which(colnames(tempMat)=="z"):which(colnames(tempMat)=="Ac.mods.pos"),
+				which(colnames(tempMat)=="n"):which(colnames(tempMat)=="Ac.mods.pos"),
 				which(colnames(tempMat)=="C"):which(colnames(tempMat)=="Cx"),
 				which(colnames(tempMat)=="minus1"):which(colnames(tempMat)=="intens"))
 		tempMat	<- tempMat[,-exclude.colnames]
@@ -51,7 +71,6 @@ for(i in 1:length(tobe.merged.folders)){
 			write.table(tempMat, file = outFilename,append=TRUE,quote = FALSE, sep = "\t",na = "NA", dec = ".", col.names=FALSE,row.names = FALSE)
 		}
 	}
-	
 	mergedMat2	<- read.delim(outFilename, sep="\t",header=TRUE,stringsAsFactors=FALSE,na.strings = c("NA","n. def."))
 	unlink(outFilename)
 	selcolnames					<- c("accession","AcK","pep_var_mod.4")
@@ -67,8 +86,20 @@ for(i in 1:length(tobe.merged.folders)){
 	###merged peptides table
 	outFilename		<- paste(c(mergedFolder,"\\",tobe.merged.names[i],"_pepMat_noFilt.txt"),collapse="")
 	unlink(outFilename)
+	colnames.list	<- result <- vector("list", length(pepMat_noFilt)) 
+	for(ii in 1:length(pepMat_noFilt)){
+		tempMat	<- read.delim(pepMat_noFilt[ii], sep="\t",header=TRUE,stringsAsFactors=FALSE,nrows=1,na.strings = c("NA","n. def."))
+		colnames.list[[ii]]	<- colnames(tempMat)
+	}
+	colnames.table	<- sort(table(ldply(lapply(colnames.list, function(x) paste(x,collapse=";;;")))),decreasing=TRUE)
+	if(length(colnames.table)>1 & TRUE %in% grepl("^accession;;;member;;;",names(colnames.table))){
+		colnames.vec	<- unlist(strsplit(names(colnames.table)[grepl("^accession;;;member;;;",names(colnames.table))][1],";;;"))
+	}else{
+		colnames.vec	<- unlist(strsplit(names(colnames.table)[1],";;;"))
+	}
 	for(ii in 1:length(pepMat_noFilt)){
 		tempMat	<- read.delim(pepMat_noFilt[ii], sep="\t",header=TRUE,stringsAsFactors=FALSE,na.strings = c("NA","n. def."))
+		tempMat	<- tempMat[,colnames.vec]
 		tempMat	<- tempMat[grepl("^agms|histone",tempMat$accession)|grepl("histone|Histone",tempMat$prot_desc),]
 
 		prefix	<- gsub(".*[/]|_Combined_Acetylation.*|_pepMat_noFilt.*","",pepMat_noFilt[ii])
@@ -89,9 +120,10 @@ for(i in 1:length(tobe.merged.folders)){
 	mergedMat2$combselcol			<- do.call(paste, c(mergedMat2[,selcolnames], sep=";;;"))
 	temptable					<- data.frame(table(mergedMat2$combselcol))
 	colnames(temptable)[2]			<- "n.pep_vm3"
-	mergedMat2	<- merge(mergedMat2,temptable,by.x="combselcol",by.y="Var1")
-	mergedMat2	<- mergedMat2[,!colnames(mergedMat2)%in%"combselcol"]
-	mergedMat2	<- mergedMat2[order(-mergedMat2$n.pep_vm3,mergedMat2$accession,mergedMat2$pep_var_mod.4,mergedMat2$pep_start,mergedMat2$pep_end),]
+	mergedMat2					<- merge(mergedMat2,temptable,by.x="combselcol",by.y="Var1")
+	mergedMat2					<- mergedMat2[,!colnames(mergedMat2)%in%"combselcol"]
+	mergedMat2					<- mergedMat2[order(-mergedMat2$n.pep_vm3,mergedMat2$accession,mergedMat2$pep_var_mod.4,mergedMat2$pep_start,mergedMat2$pep_end),]
 	write.table(mergedMat2, file = outFilename, quote = FALSE, sep = "\t",na = "", dec = ".", row.names = FALSE)
 }
-
+stopCluster(cl1)
+closeAllConnections()
